@@ -1,0 +1,39 @@
+FROM nixyslab/nxs-backup-bin AS bin
+
+FROM alpine:latest AS builder
+RUN apk add --no-cache wget tar
+WORKDIR /tmp
+RUN wget -q https://github.com/Altinity/clickhouse-backup/releases/latest/download/clickhouse-backup-linux-amd64.tar.gz \
+    && tar xzf clickhouse-backup-linux-amd64.tar.gz \
+    && find . -name "clickhouse-backup" -type f -exec mv {} /tmp/clickhouse-backup \;
+
+FROM debian:trixie-slim
+
+RUN apt update \
+    && apt install -yq --no-install-recommends \
+      ca-certificates \
+      curl \
+      gnupg \
+      tzdata \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key | gpg --dearmor -o /etc/apt/keyrings/clickhouse-keyring.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" > /etc/apt/sources.list.d/clickhouse.list \
+    && apt update \
+    && apt install -yq --no-install-recommends \
+      clickhouse-client \
+    && apt clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/apt/sources.list.d/clickhouse.list \
+    && rm -f /etc/apt/keyrings/clickhouse-keyring.gpg
+
+COPY --from=bin /nxs-backup /usr/local/bin/nxs-backup
+COPY --from=builder /tmp/clickhouse-backup /usr/local/bin/clickhouse-backup
+
+RUN mkdir -p /etc/clickhouse-backup \
+    /var/log/clickhouse-backup \
+    /etc/nxs-backup \
+    /var/log/nxs-backup
+
+WORKDIR /root
+
+CMD ["nxs-backup", "start"]
