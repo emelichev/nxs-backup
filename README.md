@@ -24,6 +24,7 @@ GNU/Linux distributions.
     - Physical backups by Basebackups of PostgreSQL (9/10/11/12/13/14/15/16/17/18/_all versions_)
     - Backups of MongoDB (4.0/4.2/4.4/5.0/6.0/7.0/8.0/_all versions_)
     - Backups of Redis (_all versions_)
+    - Backups of Clickhouse (experimental) 
   - Support of user-defined scripts that extend functionality
 - Upload and manage backups to the remote storages:
   - S3 (Simple Storage Service that provides object storage through a web interface. Supported by clouds e.g. AWS, GCP)
