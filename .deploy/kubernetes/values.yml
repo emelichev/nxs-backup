@@ -231,6 +231,36 @@ configMaps:
               days: 7
               weeks: 5
               months: 5
+        - job_name: PROJECT-clickhouse
+          type: clickhouse
+          tmp_dir: /var/nxs-backup/dump_tmp
+          safety_backup: false
+          deferred_copying: false
+          sources:
+          - name: clickhouse
+            connect:
+              db_host: clickhouse
+              db_port: "9000"
+              db_user: default
+              db_password: clickhouseP@5s
+              clickhouse_use_config: false
+              clickhouse_config_path: ""
+              clickhouse_secure: false
+              clickhouse_skip_verify: false
+              clickhouse_ssl_ca: ""
+              clickhouse_ssl_cert: ""
+              clickhouse_ssl_key: ""
+            target_dbs:
+            - all
+            extra_keys: ""
+            gzip: true
+          storages_options:
+          - storage_name: local
+            backup_path: /var/nxs-backup/dump
+            retention:
+              days: 7
+              weeks: 5
+              months: 5
         - job_name: PROJECT-mongodb
           type: mongodb
           tmp_dir: /var/nxs-backup/dump_tmp
