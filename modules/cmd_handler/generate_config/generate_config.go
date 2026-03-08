@@ -40,6 +40,14 @@ type sourceYaml struct {
 	ExtraKeys          string         `yaml:"db_extra_keys,omitempty"`
 	SkipBackupRotate   bool           `yaml:"skip_backup_rotate,omitempty"` // used by external
 	PrepareXtrabackup  bool           `yaml:"prepare_xtrabackup,omitempty"`
+	ClickHouseUseConfig  bool         `yaml:"clickhouse_use_config,omitempty"`
+	ClickHouseConfigPath string       `yaml:"clickhouse_config_path,omitempty"`
+	ClickHouseSecure     bool         `yaml:"clickhouse_secure,omitempty"`
+	ClickHouseSkipVerify bool         `yaml:"clickhouse_skip_verify,omitempty"`
+	ClickHouseSSLCA      string       `yaml:"clickhouse_ssl_ca,omitempty"`
+	ClickHouseSSLCert    string       `yaml:"clickhouse_ssl_cert,omitempty"`
+	ClickHouseSSLKey     string       `yaml:"clickhouse_ssl_key,omitempty"`
+	
 }
 
 type srcConnectYaml struct {
@@ -314,6 +322,29 @@ func (gc *generateConfig) Run() {
 				ExtraKeys:          "",
 			},
 		}
+case misc.ClickHouse:
+	job.StoragesOptions = genStorageOpts(gc.storages, false)
+	job.Sources = []sourceYaml{
+		{
+			Name: "clickhouse",
+			Gzip: true,
+			Connect: srcConnectYaml{
+				DBHost:               "clickhouse",
+				DBPort:               "9000",
+				DBUser:               "default",
+				DBPassword:           "clickhouseP@5s",
+				ClickHouseUseConfig:  false,
+				ClickHouseConfigPath: "",
+				ClickHouseSecure:     false,
+				ClickHouseSkipVerify: false,
+				ClickHouseSSLCA:      "",
+				ClickHouseSSLCert:    "",
+				ClickHouseSSLKey:     "",
+			},
+			TargetDBs: []string{"all"},
+			ExtraKeys: "",
+		},
+	}
 	case misc.Redis:
 		job.StoragesOptions = genStorageOpts(gc.storages, false)
 		job.Sources = []sourceYaml{

@@ -11,6 +11,7 @@ import (
 	"github.com/nixys/nxs-backup/ds/mysql_connect"
 	"github.com/nixys/nxs-backup/ds/psql_connect"
 	"github.com/nixys/nxs-backup/ds/redis_connect"
+	"github.com/nixys/nxs-backup/ds/clickhouse_connect"
 	"github.com/nixys/nxs-backup/interfaces"
 	"github.com/nixys/nxs-backup/misc"
 	"github.com/nixys/nxs-backup/modules/backup/desc_files"
@@ -22,6 +23,7 @@ import (
 	"github.com/nixys/nxs-backup/modules/backup/psql_logical"
 	"github.com/nixys/nxs-backup/modules/backup/psql_physical"
 	"github.com/nixys/nxs-backup/modules/backup/redis"
+	"github.com/nixys/nxs-backup/modules/backup/clickhouse"
 	"github.com/nixys/nxs-backup/modules/metrics"
 	"github.com/nixys/nxs-backup/modules/storage"
 )
@@ -374,6 +376,43 @@ func jobsInit(o jobsOpts) ([]interfaces.Job, error) {
 			}
 
 			job, err = redis.Init(redis.JobParams{
+				Name:             j.Name,
+				TmpDir:           j.TmpDir,
+				NeedToMakeBackup: needToMakeBackup,
+				SafetyBackup:     j.SafetyBackup,
+				DeferredCopying:  j.DeferredCopying,
+				DiskRateLimit:    diskRate,
+				Storages:         jobStorages,
+				Sources:          sources,
+				Metrics:          o.metricsData,
+			})
+
+
+		case misc.ClickHouse:
+			var sources []clickhousebackup.SourceParams
+
+			for _, src := range j.Sources {
+				sources = append(sources, clickhousebackup.SourceParams{
+					Name:          src.Name,
+					Host:          src.Connect.DBHost,
+					Port:          src.Connect.DBPort,
+					Username:      src.Connect.DBUser,
+					Password:      src.Connect.DBPassword,
+					TargetDBs:     src.TargetDBs,
+					TargetTables:  src.TargetTables,
+					ExcludeTables: src.ExcludeTables,
+					ExtraKeys:     getExtraKeys(src.ExtraKeys),
+					UseConfig:     src.Connect.ClickHouseUseConfig,
+					ConfigPath:    src.Connect.ClickHouseConfigPath,
+					Secure:        src.Connect.ClickHouseSecure,
+					SkipVerify:    src.Connect.ClickHouseSkipVerify,
+					SSLCA:         src.Connect.ClickHouseSSLCA,
+					SSLCert:       src.Connect.ClickHouseSSLCert,
+					SSLKey:        src.Connect.ClickHouseSSLKey,
+				})
+			}
+
+			job, err = clickhousebackup.Init(clickhousebackup.JobParams{
 				Name:             j.Name,
 				TmpDir:           j.TmpDir,
 				NeedToMakeBackup: needToMakeBackup,

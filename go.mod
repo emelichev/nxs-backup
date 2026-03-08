@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/alexflint/go-arg v1.5.1
+	github.com/ClickHouse/clickhouse-go/v2 v2.30.0
 	github.com/docker/go-units v0.5.0
 	github.com/fatih/color v1.17.0
 	github.com/gin-gonic/gin v1.10.0

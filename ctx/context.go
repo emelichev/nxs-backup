@@ -253,7 +253,7 @@ func appInit(c *Ctx, cfgPath string) (app, error) {
 		switch job.GetType() {
 		case "desc_files", "inc_files":
 			a.fileJobs = append(a.fileJobs, job)
-		case "mysql", "mysql_xtrabackup", "mariadb_backup", "postgresql", "postgresql_basebackup", "mongodb", "redis":
+		case "mysql", "mysql_xtrabackup", "mariadb_backup", "postgresql", "postgresql_basebackup", "mongodb", "clickhouse", "redis":
 			a.dbJobs = append(a.dbJobs, job)
 		case "external":
 			a.extJobs = append(a.extJobs, job)

@@ -35,6 +35,7 @@ const (
 	PostgresqlBasebackup BackupType = "postgresql_basebackup"
 	MongoDB              BackupType = "mongodb"
 	Redis                BackupType = "redis"
+	ClickHouse           BackupType = "clickhouse"
 	External             BackupType = "external"
 )
 
@@ -52,6 +53,7 @@ func AllowedBackupTypesList() []string {
 		string(PostgresqlBasebackup),
 		string(MongoDB),
 		string(Redis),
+		string (ClickHouse),
 		string(External),
 	}
 }
