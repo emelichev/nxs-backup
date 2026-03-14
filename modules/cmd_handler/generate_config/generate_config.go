@@ -40,14 +40,14 @@ type sourceYaml struct {
 	ExtraKeys          string         `yaml:"db_extra_keys,omitempty"`
 	SkipBackupRotate   bool           `yaml:"skip_backup_rotate,omitempty"` // used by external
 	PrepareXtrabackup  bool           `yaml:"prepare_xtrabackup,omitempty"`
-	ClickHouseUseConfig  bool         `yaml:"clickhouse_use_config,omitempty"`
-	ClickHouseConfigPath string       `yaml:"clickhouse_config_path,omitempty"`
-	ClickHouseSecure     bool         `yaml:"clickhouse_secure,omitempty"`
-	ClickHouseSkipVerify bool         `yaml:"clickhouse_skip_verify,omitempty"`
-	ClickHouseSSLCA      string       `yaml:"clickhouse_ssl_ca,omitempty"`
-	ClickHouseSSLCert    string       `yaml:"clickhouse_ssl_cert,omitempty"`
-	ClickHouseSSLKey     string       `yaml:"clickhouse_ssl_key,omitempty"`
-	
+	// ClickHouse specific fields
+	ClickHouseUseConfig   bool   `yaml:"clickhouse_use_config,omitempty"`
+	ClickHouseConfigPath  string `yaml:"clickhouse_config_path,omitempty"`
+	ClickHouseSecure      bool   `yaml:"clickhouse_secure,omitempty"`
+	ClickHouseSkipVerify  bool   `yaml:"clickhouse_skip_verify,omitempty"`
+	ClickHouseSSLCA       string `yaml:"clickhouse_ssl_ca,omitempty"`
+	ClickHouseSSLCert     string `yaml:"clickhouse_ssl_cert,omitempty"`
+	ClickHouseSSLKey      string `yaml:"clickhouse_ssl_key,omitempty"`
 }
 
 type srcConnectYaml struct {
@@ -61,6 +61,13 @@ type srcConnectYaml struct {
 	MongoRSName    string        `yaml:"mongo_replica_set_name,omitempty"`
 	MongoRSAddr    string        `yaml:"mongo_replica_set_address,omitempty"`
 	ConnectTimeout time.Duration `yaml:"connection_timeout,omitempty"`
+	ClickHouseUseConfig   bool   `yaml:"clickhouse_use_config,omitempty"`
+	ClickHouseConfigPath  string `yaml:"clickhouse_config_path,omitempty"`
+	ClickHouseSecure      bool   `yaml:"clickhouse_secure,omitempty"`
+	ClickHouseSkipVerify  bool   `yaml:"clickhouse_skip_verify,omitempty"`
+	ClickHouseSSLCA       string `yaml:"clickhouse_ssl_ca,omitempty"`
+	ClickHouseSSLCert     string `yaml:"clickhouse_ssl_cert,omitempty"`
+	ClickHouseSSLKey      string `yaml:"clickhouse_ssl_key,omitempty"`
 }
 
 type storageOptsYaml struct {
