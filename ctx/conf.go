@@ -102,6 +102,8 @@ type sourceConf struct {
 	IsSlave            bool              `conf:"is_slave" conf_extraopts:"default=false"`
 	SaveAbsPath        bool              `conf:"save_abs_path" conf_extraopts:"default=true"`
 	PrepareXtrabackup  bool              `conf:"prepare_xtrabackup" conf_extraopts:"default=false"`
+	TargetTables       []string          `conf:"target_tables,omitempty"`
+	ExcludeTables      []string          `conf:"exclude_tables,omitempty"`
 }
 
 type sourceConnectConf struct {
