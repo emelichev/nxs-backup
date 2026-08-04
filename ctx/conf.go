@@ -98,6 +98,7 @@ type sourceConf struct {
 	ExcludeDBs         []string          `conf:"exclude_dbs"`
 	ExcludeCollections []string          `conf:"exclude_collections"`
 	ExtraKeys          string            `conf:"db_extra_keys"`
+	DefaultsFile       string            `conf:"defaults_file"`
 	Gzip               *bool             `conf:"gzip" conf_extraopts:"default=false"`
 	IsSlave            bool              `conf:"is_slave" conf_extraopts:"default=false"`
 	SaveAbsPath        bool              `conf:"save_abs_path" conf_extraopts:"default=true"`

@@ -229,13 +229,14 @@ func jobsInit(o jobsOpts) ([]interfaces.Job, error) {
 						SSLCert:  src.Connect.SSLCert,
 						SSLKey:   src.Connect.SSLKey,
 					},
-					Name:      src.Name,
-					TargetDBs: src.TargetDBs,
-					Excludes:  src.Excludes,
-					IsSlave:   src.IsSlave,
-					Prepare:   src.PrepareXtrabackup,
-					ExtraKeys: getExtraKeys(src.ExtraKeys),
-					Gzip:      isGzip(src.Gzip, j.Gzip),
+					Name:         src.Name,
+					TargetDBs:    src.TargetDBs,
+					Excludes:     src.Excludes,
+					IsSlave:      src.IsSlave,
+					Prepare:      src.PrepareXtrabackup,
+					DefaultsFile: src.DefaultsFile,
+					ExtraKeys:    getExtraKeys(src.ExtraKeys),
+					Gzip:         isGzip(src.Gzip, j.Gzip),
 				})
 			}
 

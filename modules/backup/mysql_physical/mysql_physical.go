@@ -42,6 +42,7 @@ type job struct {
 type target struct {
 	extraKeys       []string
 	authFile        *ini.File
+	defaultsFile    string
 	ignoreDatabases string
 	gzip            bool
 	isSlave         bool
@@ -67,6 +68,7 @@ type SourceParams struct {
 	TargetDBs     []string
 	Excludes      []string
 	ExtraKeys     []string
+	DefaultsFile  string
 	Gzip          bool
 	IsSlave       bool
 	Prepare       bool
@@ -83,6 +85,14 @@ func getApp(t misc.BackupType) (app string) {
 }
 
 func Init(jp JobParams) (interfaces.Job, error) {
+	for _, src := range jp.Sources {
+		if src.DefaultsFile == "" {
+			continue
+		}
+		if err := validateDefaultsFile(src.DefaultsFile); err != nil {
+			return nil, fmt.Errorf("job %q source %q: invalid defaults_file %q: %w", jp.Name, src.Name, src.DefaultsFile, err)
+		}
+	}
 
 	// check if backup application is available
 	if _, err := exec_cmd.Exec(getApp(jp.BackupType), "--version"); err != nil {
@@ -131,6 +141,7 @@ func Init(jp JobParams) (interfaces.Job, error) {
 
 		j.targets[src.Name] = target{
 			authFile:        authFile,
+			defaultsFile:    src.DefaultsFile,
 			ignoreDatabases: ignoreDBs,
 			extraKeys:       src.ExtraKeys,
 			gzip:            src.Gzip,
@@ -145,6 +156,43 @@ func Init(jp JobParams) (interfaces.Job, error) {
 	}
 
 	return &j, nil
+}
+
+func validateDefaultsFile(filePath string) error {
+	// Check the type before opening so a FIFO or another special file cannot
+	// block initialization. Symlinks to regular files are intentionally allowed:
+	// the source is copied into a regular temporary file before xtrabackup runs.
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("stat file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("path is not a regular file (mode %s)", info.Mode())
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("open file for reading: %w", err)
+	}
+
+	// Stat the opened descriptor as well, so a path replaced between the first
+	// Stat and Open is not accepted unnoticed.
+	openedInfo, statErr := file.Stat()
+	closeErr := file.Close()
+	if closeErr != nil {
+		closeErr = fmt.Errorf("close file after validation: %w", closeErr)
+	}
+	if statErr != nil {
+		return errors.Join(fmt.Errorf("stat opened file: %w", statErr), closeErr)
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return errors.Join(fmt.Errorf("opened path is not a regular file (mode %s)", openedInfo.Mode()), closeErr)
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+
+	return nil
 }
 
 func (j *job) SetOfsMetrics(ofs string, metricsMap map[string]float64) {
@@ -285,20 +333,46 @@ func (j *job) createTmpBackup(logCh chan logger.LogRecord, tmpBackupFile, tgtNam
 
 	tmpBackupPath := path.Join(path.Dir(tmpBackupFile), getApp(j.backupType)+"_"+tgtName+"_"+misc.GetDateTimeNow(""))
 
-	authFile, err := files.CreateTmpMysqlAuthFile(target.authFile)
-	if err != nil {
-		logCh <- logger.Log(j.name, "").Errorf("Failed to create tmp auth file. Error: %s", err)
-		return err
-	}
-	defer func() {
-		if err = files.DeleteTmpMysqlAuthFile(authFile); err != nil {
-			logCh <- logger.Log(j.name, "").Errorf("Failed to delete tmp auth file. Error: %s", err)
+	// Build the single leading "defaults" option. xtrabackup/mariadb-backup
+	// require it to be the first argument and accept only ONE of
+	// `--defaults-file` / `--defaults-extra-file`, so when a server defaults file
+	// is configured we merge it together with the credentials into one file and
+	// pass it as `--defaults-file`; otherwise we keep injecting credentials via
+	// `--defaults-extra-file` (relying on the tool's default config locations).
+	var (
+		defaultsArg string
+		err         error
+	)
+	if target.defaultsFile != "" {
+		var defaultsFile string
+		defaultsFile, err = files.CreateTmpMysqlDefaultsFile(target.defaultsFile, target.authFile)
+		if err != nil {
+			logCh <- logger.Log(j.name, "").Errorf("Failed to create tmp defaults file. Error: %s", err)
+			return err
 		}
-	}()
+		defer func() {
+			if err = files.DeleteTmpMysqlAuthFile(defaultsFile); err != nil {
+				logCh <- logger.Log(j.name, "").Errorf("Failed to delete tmp defaults file. Error: %s", err)
+			}
+		}()
+		defaultsArg = "--defaults-file=" + defaultsFile
+	} else {
+		var authFile string
+		authFile, err = files.CreateTmpMysqlAuthFile(target.authFile)
+		if err != nil {
+			logCh <- logger.Log(j.name, "").Errorf("Failed to create tmp auth file. Error: %s", err)
+			return err
+		}
+		defer func() {
+			if err = files.DeleteTmpMysqlAuthFile(authFile); err != nil {
+				logCh <- logger.Log(j.name, "").Errorf("Failed to delete tmp auth file. Error: %s", err)
+			}
+		}()
+		defaultsArg = "--defaults-extra-file=" + authFile
+	}
 
-	// define commands args with auth options
-	backupArgs = append(backupArgs, "--defaults-extra-file="+authFile)
-	prepareArgs = backupArgs
+	backupArgs = append(backupArgs, defaultsArg)
+	prepareArgs = append(prepareArgs, defaultsArg)
 	// add backup options
 	backupArgs = append(backupArgs, "--backup", "--target-dir="+tmpBackupPath)
 	if target.ignoreDatabases != "" {

@@ -1,6 +1,8 @@
 package files
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -43,16 +45,107 @@ func (lrc *LimitedReadCloser) Seek(offset int64, whence int) (int64, error) {
 }
 
 func CreateTmpMysqlAuthFile(af *ini.File) (authFile string, err error) {
-	authFile = filepath.Join("/tmp", misc.RandString(20))
-	file, err := os.OpenFile(authFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0400)
-	if err != nil {
-		return
-	}
-	defer func() { _ = file.Close() }()
+	return createTmpMysqlOptionFile("/tmp", func(file io.Writer) error {
+		_, err := af.WriteTo(file)
+		return err
+	})
+}
 
-	if _, err = af.WriteTo(file); err != nil {
+// CreateTmpMysqlDefaultsFile writes a single MySQL option file that combines the
+// user-provided defaults file (e.g. the server my.cnf, needed for datadir and
+// other server settings) with the connection credentials section, and returns
+// its path. It is passed to xtrabackup/mariadb-backup as a single
+// `--defaults-file`: these tools accept only one leading "defaults" option and
+// it must come first, so credentials cannot be supplied via a separate
+// `--defaults-extra-file` when `--defaults-file` is used.
+func CreateTmpMysqlDefaultsFile(srcDefaultsFile string, af *ini.File) (defaultsFile string, err error) {
+	src, err := os.ReadFile(srcDefaultsFile)
+	if err != nil {
+		return "", fmt.Errorf("read MySQL defaults file %q: %w", srcDefaultsFile, err)
+	}
+
+	return createTmpMysqlOptionFile("/tmp", func(file io.Writer) error {
+		// Inline the user's defaults file first (keeps its groups, e.g.
+		// [mysqld] datadir), then append the credentials group.
+		if _, err := file.Write(src); err != nil {
+			return err
+		}
+		if _, err := io.WriteString(file, "\n"); err != nil {
+			return err
+		}
+		_, err := af.WriteTo(file)
+		return err
+	})
+}
+
+// createTmpMysqlOptionFile creates a private, uniquely named MySQL option file.
+// The file is returned only after its contents have been written, it has been
+// closed successfully, and its mode has been restricted to read-only. Any
+// failure removes the incomplete file before returning.
+func createTmpMysqlOptionFile(tempDir string, writeContent func(io.Writer) error) (filePath string, err error) {
+	return createTmpMysqlOptionFileWithName(tempDir, func() string {
+		return misc.RandString(20)
+	}, writeContent)
+}
+
+func createTmpMysqlOptionFileWithName(tempDir string, generateName func() string, writeContent func(io.Writer) error) (filePath string, err error) {
+	const maxCreateAttempts = 100
+
+	var file *os.File
+	for range maxCreateAttempts {
+		// Keep the historical /tmp/<20 alphanumeric characters> filename
+		// format, but use O_EXCL so a collision can never overwrite an
+		// existing file.
+		filePath = filepath.Join(tempDir, generateName())
+		file, err = os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return "", fmt.Errorf("create temporary MySQL option file %q: %w", filePath, err)
+		}
+	}
+	if file == nil {
+		return "", fmt.Errorf("create temporary MySQL option file: unable to allocate a unique name after %d attempts", maxCreateAttempts)
+	}
+
+	filePath = file.Name()
+	closed := false
+	keep := false
+	defer func() {
+		if !closed {
+			closeErr := file.Close()
+			if closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close temporary MySQL option file %q: %w", filePath, closeErr))
+			}
+		}
+		if !keep {
+			removeErr := os.Remove(filePath)
+			if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				err = errors.Join(err, fmt.Errorf("remove temporary MySQL option file %q: %w", filePath, removeErr))
+			}
+			filePath = ""
+		}
+	}()
+
+	if err = writeContent(file); err != nil {
+		err = fmt.Errorf("write temporary MySQL option file %q: %w", filePath, err)
 		return
 	}
+
+	err = file.Close()
+	closed = true
+	if err != nil {
+		err = fmt.Errorf("close temporary MySQL option file %q: %w", filePath, err)
+		return
+	}
+
+	if err = os.Chmod(filePath, 0400); err != nil {
+		err = fmt.Errorf("set permissions on temporary MySQL option file %q: %w", filePath, err)
+		return
+	}
+
+	keep = true
 	return
 }
 
