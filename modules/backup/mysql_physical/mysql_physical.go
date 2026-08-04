@@ -85,6 +85,14 @@ func getApp(t misc.BackupType) (app string) {
 }
 
 func Init(jp JobParams) (interfaces.Job, error) {
+	for _, src := range jp.Sources {
+		if src.DefaultsFile == "" {
+			continue
+		}
+		if err := validateDefaultsFile(src.DefaultsFile); err != nil {
+			return nil, fmt.Errorf("job %q source %q: invalid defaults_file %q: %w", jp.Name, src.Name, src.DefaultsFile, err)
+		}
+	}
 
 	// check if backup application is available
 	if _, err := exec_cmd.Exec(getApp(jp.BackupType), "--version"); err != nil {
@@ -148,6 +156,43 @@ func Init(jp JobParams) (interfaces.Job, error) {
 	}
 
 	return &j, nil
+}
+
+func validateDefaultsFile(filePath string) error {
+	// Check the type before opening so a FIFO or another special file cannot
+	// block initialization. Symlinks to regular files are intentionally allowed:
+	// the source is copied into a regular temporary file before xtrabackup runs.
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("stat file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("path is not a regular file (mode %s)", info.Mode())
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("open file for reading: %w", err)
+	}
+
+	// Stat the opened descriptor as well, so a path replaced between the first
+	// Stat and Open is not accepted unnoticed.
+	openedInfo, statErr := file.Stat()
+	closeErr := file.Close()
+	if closeErr != nil {
+		closeErr = fmt.Errorf("close file after validation: %w", closeErr)
+	}
+	if statErr != nil {
+		return errors.Join(fmt.Errorf("stat opened file: %w", statErr), closeErr)
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return errors.Join(fmt.Errorf("opened path is not a regular file (mode %s)", openedInfo.Mode()), closeErr)
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+
+	return nil
 }
 
 func (j *job) SetOfsMetrics(ofs string, metricsMap map[string]float64) {
