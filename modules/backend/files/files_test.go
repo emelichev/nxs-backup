@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -25,6 +26,9 @@ func TestCreateTmpMysqlOptionFile(t *testing.T) {
 
 		if filepath.Dir(filePath) != tempDir {
 			t.Fatalf("temporary file directory = %q, want %q", filepath.Dir(filePath), tempDir)
+		}
+		if matched := regexp.MustCompile(`^[A-Za-z0-9]{20}$`).MatchString(filepath.Base(filePath)); !matched {
+			t.Fatalf("temporary file name = %q, want 20 alphanumeric characters", filepath.Base(filePath))
 		}
 		content, err := os.ReadFile(filePath)
 		if err != nil {
@@ -103,6 +107,40 @@ func TestCreateTmpMysqlOptionFile(t *testing.T) {
 		t.Cleanup(func() { _ = os.Remove(secondPath) })
 		if firstPath == secondPath {
 			t.Fatalf("temporary file paths are equal: %q", firstPath)
+		}
+	})
+
+	t.Run("does not overwrite a colliding path", func(t *testing.T) {
+		tempDir := t.TempDir()
+		const existingName = "AAAAAAAAAAAAAAAAAAAA"
+		const availableName = "BBBBBBBBBBBBBBBBBBBB"
+		existingPath := filepath.Join(tempDir, existingName)
+		if err := os.WriteFile(existingPath, []byte("existing"), 0600); err != nil {
+			t.Fatalf("write colliding file: %v", err)
+		}
+
+		names := []string{existingName, availableName}
+		filePath, err := createTmpMysqlOptionFileWithName(tempDir, func() string {
+			name := names[0]
+			names = names[1:]
+			return name
+		}, func(file io.Writer) error {
+			_, err := io.WriteString(file, "new")
+			return err
+		})
+		if err != nil {
+			t.Fatalf("createTmpMysqlOptionFileWithName() error = %v", err)
+		}
+		t.Cleanup(func() { _ = os.Remove(filePath) })
+		if filepath.Base(filePath) != availableName {
+			t.Fatalf("temporary file name = %q, want %q", filepath.Base(filePath), availableName)
+		}
+		existingContent, err := os.ReadFile(existingPath)
+		if err != nil {
+			t.Fatalf("read colliding file: %v", err)
+		}
+		if string(existingContent) != "existing" {
+			t.Fatalf("colliding file content = %q, want %q", existingContent, "existing")
 		}
 	})
 }

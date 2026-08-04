@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/juju/ratelimit"
 	"gopkg.in/ini.v1"
+
+	"github.com/nixys/nxs-backup/misc"
 )
 
 type limitedWriteCloser struct {
@@ -80,9 +83,30 @@ func CreateTmpMysqlDefaultsFile(srcDefaultsFile string, af *ini.File) (defaultsF
 // closed successfully, and its mode has been restricted to read-only. Any
 // failure removes the incomplete file before returning.
 func createTmpMysqlOptionFile(tempDir string, writeContent func(io.Writer) error) (filePath string, err error) {
-	file, err := os.CreateTemp(tempDir, "nxs-backup-mysql-")
-	if err != nil {
-		return "", fmt.Errorf("create temporary MySQL option file: %w", err)
+	return createTmpMysqlOptionFileWithName(tempDir, func() string {
+		return misc.RandString(20)
+	}, writeContent)
+}
+
+func createTmpMysqlOptionFileWithName(tempDir string, generateName func() string, writeContent func(io.Writer) error) (filePath string, err error) {
+	const maxCreateAttempts = 100
+
+	var file *os.File
+	for range maxCreateAttempts {
+		// Keep the historical /tmp/<20 alphanumeric characters> filename
+		// format, but use O_EXCL so a collision can never overwrite an
+		// existing file.
+		filePath = filepath.Join(tempDir, generateName())
+		file, err = os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return "", fmt.Errorf("create temporary MySQL option file %q: %w", filePath, err)
+		}
+	}
+	if file == nil {
+		return "", fmt.Errorf("create temporary MySQL option file: unable to allocate a unique name after %d attempts", maxCreateAttempts)
 	}
 
 	filePath = file.Name()
